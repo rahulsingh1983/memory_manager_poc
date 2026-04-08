@@ -18,9 +18,9 @@
 
 The system is split into three cooperating components:
 
-- **Manager layer**: Public API and orchestration logic.
-- **Store layer**: Physical disk access and free-space management.
-- **VMM layer**: Logical-to-physical address translation and handle mapping metadata.
+- **Manager layer**: Public API and orchestration logic. (`memory/`)
+- **Store layer**: Physical disk access and free-space management. (`internal/store/`)
+- **VMM layer**: Logical-to-physical address translation and handle mapping metadata. (`internal/vmm/`)
 
 Interaction model:
 
@@ -32,7 +32,11 @@ Interaction model:
 
 ## 3. Store Layer
 
+> **Source directory**: `internal/store/`
+
 ### 3.1 Disk
+
+> **Source file**: `internal/store/disk.go`
 
 Disk is a bounded byte array with:
 
@@ -43,6 +47,8 @@ Disk is a bounded byte array with:
 All operations enforce bounds checks.
 
 ### 3.2 Free List and Extents
+
+> **Source file**: `internal/store/free_list.go`
 
 Free space is represented as sorted, non-overlapping extents.
 
@@ -61,6 +67,8 @@ Free space is represented as sorted, non-overlapping extents.
 
 ## 4. VMM Layer
 
+> **Source directory**: `internal/vmm/`
+
 ### 4.1 Purpose
 
 VMM allows clients to treat allocations as logically contiguous even when physical storage is fragmented.
@@ -71,6 +79,8 @@ Each handle maps to an ordered segment list. Segments should cover logical range
 
 ### 4.3 AddMapping
 
+> **Source file**: `internal/vmm/table.go`
+
 Given extents and requested size, VMM:
 
 1. Builds ordered segments with increasing logical offsets.
@@ -80,6 +90,8 @@ Given extents and requested size, VMM:
 
 ### 4.4 Translate
 
+> **Source file**: `internal/vmm/translate.go`
+
 `Translate(handle, off, n)`:
 
 1. Validates range inputs.
@@ -88,6 +100,8 @@ Given extents and requested size, VMM:
 4. Supports multi-span output when allocation is fragmented.
 
 ## 5. Manager Internal Operation Flows
+
+> **Source directory**: `memory/` — orchestration in `manager.go`, public types in `types.go`, public errors in `errors.go`
 
 ### 5.1 Alloc(size)
 
