@@ -77,6 +77,4 @@ go version
 ```zsh
 make build   # compile to bin/app
 make test    # run all tests
-make run     # build and run
-make proto   # regenerate protobuf files
 ```
