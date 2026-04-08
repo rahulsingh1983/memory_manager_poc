@@ -20,6 +20,9 @@ type Segment struct {
 }
 
 type Table struct {
+	// TODO: Right now we use a uint64 for handle generation.
+	// For large number of handle allocations, this will lead to wraparound and potential reuse of handles,
+	// which can cause bugs if old handles are still referenced.
 	nextHandle uint64               // monotonically increasing handle generator
 	mappings   map[uint64][]Segment // handle -> segments. Each handle is basically a unique uint64.
 	sizes      map[uint64]int       // handle -> total size of the mapping

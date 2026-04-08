@@ -104,6 +104,33 @@ Component ownership:
 - **Store**: physical extent reservation.
 - **VMM**: handle allocation and mapping persistence.
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Manager
+    participant Store
+    participant VMM
+
+    Client->>Manager: Alloc(size)
+    Manager->>Manager: Validate size > 0
+    Manager->>Store: Reserve(size)
+    alt insufficient space
+        Store-->>Manager: ErrInsufficientSpace
+        Manager-->>Client: ErrOutOfMemory
+    else extents returned
+        Store-->>Manager: extents
+        Manager->>VMM: AddMapping(extents, size)
+        alt mapping fails
+            VMM-->>Manager: error
+            Manager->>Store: Release(extents)
+            Manager-->>Client: error
+        else success
+            VMM-->>Manager: handle
+            Manager-->>Client: handle
+        end
+    end
+```
+
 ### 5.2 Free(handle)
 
 1. Validate handle token.
@@ -119,6 +146,27 @@ Component ownership:
 - **VMM**: mapping lifecycle and extent recovery.
 - **Store**: free-space reintegration and coalescing.
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Manager
+    participant Store
+    participant VMM
+
+    Client->>Manager: Free(handle)
+    Manager->>Manager: Validate handle token
+    Manager->>VMM: Remove(handle)
+    alt handle not found
+        VMM-->>Manager: ErrMissingMapping
+        Manager-->>Client: ErrInvalidHandle
+    else mapping found
+        VMM-->>Manager: extents
+        Manager->>Store: Release(extents)
+        Store-->>Manager: ok
+        Manager-->>Client: ok
+    end
+```
+
 ### 5.3 Read(handle, off, n)
 
 1. Validate handle, `off >= 0`, `n >= 0`.
@@ -130,6 +178,33 @@ Component ownership:
 
 Guarantee: Logical byte order is preserved even across multiple physical spans.
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Manager
+    participant Store
+    participant VMM
+
+    Client->>Manager: Read(handle, off, n)
+    Manager->>Manager: Validate handle, off >= 0, n >= 0
+    alt n == 0
+        Manager-->>Client: []byte{}
+    else n > 0
+        Manager->>VMM: Translate(handle, off, n)
+        alt translation error
+            VMM-->>Manager: ErrInvalidHandle / ErrOutOfBounds
+            Manager-->>Client: ErrInvalidHandle / ErrOutOfBounds
+        else spans returned
+            VMM-->>Manager: spans
+            loop for each span
+                Manager->>Store: ReadAt(offset, length)
+                Store-->>Manager: chunk
+            end
+            Manager-->>Client: concatenated bytes
+        end
+    end
+```
+
 ### 5.4 Write(handle, off, data)
 
 1. Validate handle and `off >= 0`.
@@ -140,6 +215,33 @@ Guarantee: Logical byte order is preserved even across multiple physical spans.
 6. Call Store `WriteAt` for each span in order.
 
 Note: `Write` is not transactional across spans in v1. If a later span fails, earlier writes remain applied.
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Manager
+    participant Store
+    participant VMM
+
+    Client->>Manager: Write(handle, off, data)
+    Manager->>Manager: Validate handle, off >= 0
+    alt len(data) == 0
+        Manager-->>Client: ok
+    else data non-empty
+        Manager->>VMM: Translate(handle, off, len(data))
+        alt translation error
+            VMM-->>Manager: ErrInvalidHandle / ErrOutOfBounds
+            Manager-->>Client: ErrInvalidHandle / ErrOutOfBounds
+        else spans returned
+            VMM-->>Manager: spans
+            loop for each span
+                Manager->>Store: WriteAt(offset, data_slice)
+                Store-->>Manager: ok / error
+            end
+            Manager-->>Client: ok (non-transactional)
+        end
+    end
+```
 
 ## 6. Error Model
 
